@@ -1,0 +1,45 @@
+name: Build macOS Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Git tag to build (e.g., v1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout private repo
+        uses: actions/checkout@v3
+        with:
+          repository: 您的GitHub用户名/cmdwise  # 替换为您的实际仓库路径
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          ref: ${{ github.event.inputs.tag }}
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Install dependencies
+        run: npm install
+      
+      - name: Build for macOS
+        run: npm run dist:macos
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ github.event.inputs.tag }}
+          name: Release ${{ github.event.inputs.tag }}
+          files: |
+            release/*.dmg
+            release/*.zip
+          draft: false
+          prerelease: false
