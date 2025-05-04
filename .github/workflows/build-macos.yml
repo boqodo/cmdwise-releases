@@ -95,29 +95,6 @@ jobs:
           security find-identity -v -p codesigning
           echo "Certificates prepared successfully"
       
-      - name: Test Apple credentials
-        run: |
-          echo "=== Testing Apple credentials ==="
-          # 删除已有的凭据配置（如果存在）
-          xcrun notarytool store-credentials --keychain-remove "test-credentials" || true
-          
-          # 存储凭据，不使用 --no-prompt 选项
-          xcrun notarytool store-credentials "test-credentials" \
-            --apple-id "$APPLE_ID" \
-            --team-id "$APPLE_TEAM_ID" \
-            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
-            --force
-          
-          echo "Testing notarytool connectivity..."
-          xcrun notarytool history --keychain-profile "test-credentials" || echo "Failed to retrieve history"
-          
-          echo "Testing notarize command structure:"
-          xcrun notarytool --help | head -20
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      
       - name: Build and Sign for macOS
         id: build
         continue-on-error: true
@@ -152,21 +129,36 @@ jobs:
           
           echo "Checking if build.log exists:"
           if [ -f build.log ]; then
-            echo "Last 50 lines of build.log:"
-            tail -n 50 build.log
+            echo "Last 100 lines of build.log:"
+            tail -n 100 build.log
             
-            echo "Searching for errors:"
-            grep -A 10 -B 10 -i "error" build.log || echo "No error pattern found"
+            echo "============================================"
+            echo "Searching for specific error patterns:"
+            echo "============================================"
             
-            echo "Searching for notarization errors:"
+            echo "Error patterns:"
+            grep -A 10 -B 10 -E "(Error|Exception|error)" build.log || echo "No error pattern found"
+            
+            echo "============================================"
+            echo "Notarization patterns:"
             grep -A 10 -B 10 -i "notarize" build.log || echo "No notarize pattern found"
             
-            echo "Searching for JSON errors:"
+            echo "============================================"
+            echo "JSON parsing patterns:"
             grep -A 10 -B 10 -i "json" build.log || echo "No JSON pattern found"
+            
+            echo "============================================"
+            echo "HTTP patterns:"
+            grep -A 10 -B 10 -E "(HTT|HTTP)" build.log || echo "No HTTP pattern found"
+            
+            echo "============================================"
+            echo "Unexpected token patterns:"
+            grep -A 10 -B 10 -i "unexpected token" build.log || echo "No unexpected token pattern found"
           else
             echo "build.log not found"
           fi
           
+          echo "============================================"
           echo "Checking release directory:"
           if [ -d release ]; then
             echo "Contents of release directory:"
@@ -176,6 +168,7 @@ jobs:
             echo "release directory not found"
           fi
           
+          echo "============================================"
           echo "Checking for npm logs:"
           if [ -d ~/.npm/_logs ]; then
             echo "Latest npm debug log:"
@@ -184,9 +177,6 @@ jobs:
           else
             echo "No npm logs found"
           fi
-          
-          echo "Checking notarytool status:"
-          xcrun notarytool history --keychain-profile "test-credentials" || echo "Could not retrieve notarytool history"
       
       - name: Upload debug artifacts
         if: failure()
