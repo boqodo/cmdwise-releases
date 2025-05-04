@@ -37,49 +37,175 @@ jobs:
             ${{ runner.os }}-node-
       
       - name: Install dependencies
-        run: npm install
+        run: |
+          npm install
+          npm install @electron/notarize --save-dev
+          echo "Dependencies installed successfully"
+      
+      - name: Check environment
+        run: |
+          echo "=== Environment Check ==="
+          echo "Node version: $(node -v)"
+          echo "npm version: $(npm -v)"
+          echo "xcrun version: $(xcrun --version)"
+          echo "notarytool version: $(xcrun notarytool --version)"
+          echo "Xcode path: $(xcode-select -p)"
+          echo "Available signing identities:"
+          security find-identity -v -p codesigning || echo "No signing identities found"
+      
+      - name: Check secrets
+        run: |
+          echo "=== Checking Secrets ==="
+          echo "APPLE_ID is set: $([ -n "$APPLE_ID" ] && echo "YES" || echo "NO")"
+          echo "APPLE_ID length: ${#APPLE_ID}"
+          echo "APPLE_ID first 3 chars: ${APPLE_ID:0:3}***"
+          echo "APPLE_APP_SPECIFIC_PASSWORD is set: $([ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] && echo "YES" || echo "NO")"
+          echo "APPLE_APP_SPECIFIC_PASSWORD length: ${#APPLE_APP_SPECIFIC_PASSWORD}"
+          echo "APPLE_APP_SPECIFIC_PASSWORD first 3 chars: ${APPLE_APP_SPECIFIC_PASSWORD:0:3}***"
+          echo "APPLE_TEAM_ID is set: $([ -n "$APPLE_TEAM_ID" ] && echo "YES" || echo "NO")"
+          echo "APPLE_TEAM_ID: ${APPLE_TEAM_ID}"
+          echo "APPLE_CERTIFICATE is set: $([ -n "$APPLE_CERTIFICATE" ] && echo "YES" || echo "NO")"
+          echo "APPLE_CERTIFICATE_PASSWORD is set: $([ -n "$APPLE_CERTIFICATE_PASSWORD" ] && echo "YES" || echo "NO")"
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
       
       - name: Prepare certificates
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
         run: |
-          echo "Preparing certificates..."
+          echo "=== Preparing certificates ==="
           mkdir -p ~/certs
           echo "$APPLE_CERTIFICATE" | base64 --decode > ~/certs/dev-cert.p12
+          
+          echo "Creating keychain..."
           security create-keychain -p "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" build.keychain
           security default-keychain -s build.keychain
           security unlock-keychain -p "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" build.keychain
+          
+          echo "Importing certificate..."
           security import ~/certs/dev-cert.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple: -s -k "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" build.keychain
+          
+          echo "Checking certificates after import:"
+          security find-identity -v -p codesigning
           echo "Certificates prepared successfully"
       
-      - name: Debug environment variables
+      - name: Test Apple credentials
         run: |
-          echo "APPLE_ID is set: ${{ secrets.APPLE_ID != '' }}"
-          echo "APPLE_PASSWORD is set: ${{ secrets.APPLE_PASSWORD != '' }}"
-          echo "APPLE_TEAM_ID is set: ${{ secrets.APPLE_TEAM_ID != '' }}"
+          echo "=== Testing Apple credentials ==="
+          xcrun notarytool store-credentials test-credentials \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --no-prompt \
+            --force
+          
+          echo "Testing notarytool connectivity..."
+          xcrun notarytool history --keychain-profile test-credentials || echo "Failed to retrieve history"
+          
+          echo "Testing notarize command structure:"
+          xcrun notarytool --help | head -20
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       
       - name: Build and Sign for macOS
+        id: build
+        continue-on-error: true
         run: |
-          echo "Starting build and sign process..."
-          export DEBUG=electron-notarize,electron-notarize:apple-notarytool
-          npm run dist:macos
+          echo "=== Starting build and sign process ==="
+          export DEBUG="*"
+          export ELECTRON_BUILDER_CACHE=1
+          
+          echo "Current working directory: $(pwd)"
+          echo "Listing files in current directory:"
+          ls -la
+          
+          echo "Starting build with debug output..."
+          npm run dist:macos 2>&1 | tee build.log
+          
+          BUILD_EXIT_CODE=${PIPESTATUS[0]}
+          echo "Build exit code: $BUILD_EXIT_CODE"
+          exit $BUILD_EXIT_CODE
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           CSC_LINK: ~/certs/dev-cert.p12
           CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
       
+      - name: Analyze build output
+        if: failure()
+        run: |
+          echo "=== Analyzing build failure ==="
+          echo "Exit code: ${{ steps.build.outcome }}"
+          
+          echo "Checking if build.log exists:"
+          if [ -f build.log ]; then
+            echo "Last 50 lines of build.log:"
+            tail -n 50 build.log
+            
+            echo "Searching for errors:"
+            grep -A 10 -B 10 -i "error" build.log || echo "No error pattern found"
+            
+            echo "Searching for notarization errors:"
+            grep -A 10 -B 10 -i "notarize" build.log || echo "No notarize pattern found"
+            
+            echo "Searching for JSON errors:"
+            grep -A 10 -B 10 -i "json" build.log || echo "No JSON pattern found"
+          else
+            echo "build.log not found"
+          fi
+          
+          echo "Checking release directory:"
+          if [ -d release ]; then
+            echo "Contents of release directory:"
+            ls -la release/
+            find release -type f -name '*.log' -exec echo "=== {} ===" \; -exec cat {} \; -exec echo "=========" \;
+          else
+            echo "release directory not found"
+          fi
+          
+          echo "Checking for npm logs:"
+          if [ -d ~/.npm/_logs ]; then
+            echo "Latest npm debug log:"
+            ls -la ~/.npm/_logs/
+            cat ~/.npm/_logs/$(ls -t ~/.npm/_logs/ | head -1)
+          else
+            echo "No npm logs found"
+          fi
+          
+          echo "Checking notarytool status:"
+          xcrun notarytool history --keychain-profile test-credentials || echo "Could not retrieve notarytool history"
+      
+      - name: Upload debug artifacts
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: debug-logs
+          path: |
+            build.log
+            release/**/*
+            ~/.npm/_logs/*
+            *.json
+      
       - name: Cleanup
         if: always()
         run: |
-          security delete-keychain build.keychain
+          echo "=== Cleanup ==="
+          security delete-keychain build.keychain || echo "No keychain to delete"
           rm -rf ~/certs
+          echo "Cleanup completed"
       
       - name: Create Release
+        if: success()
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ github.event.inputs.tag }}
