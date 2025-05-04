@@ -98,15 +98,18 @@ jobs:
       - name: Test Apple credentials
         run: |
           echo "=== Testing Apple credentials ==="
-          xcrun notarytool store-credentials test-credentials \
+          # 删除已有的凭据配置（如果存在）
+          xcrun notarytool store-credentials --keychain-remove "test-credentials" || true
+          
+          # 存储凭据，不使用 --no-prompt 选项
+          xcrun notarytool store-credentials "test-credentials" \
             --apple-id "$APPLE_ID" \
             --team-id "$APPLE_TEAM_ID" \
             --password "$APPLE_APP_SPECIFIC_PASSWORD" \
-            --no-prompt \
             --force
           
           echo "Testing notarytool connectivity..."
-          xcrun notarytool history --keychain-profile test-credentials || echo "Failed to retrieve history"
+          xcrun notarytool history --keychain-profile "test-credentials" || echo "Failed to retrieve history"
           
           echo "Testing notarize command structure:"
           xcrun notarytool --help | head -20
@@ -183,7 +186,7 @@ jobs:
           fi
           
           echo "Checking notarytool status:"
-          xcrun notarytool history --keychain-profile test-credentials || echo "Could not retrieve notarytool history"
+          xcrun notarytool history --keychain-profile "test-credentials" || echo "Could not retrieve notarytool history"
       
       - name: Upload debug artifacts
         if: failure()
@@ -195,7 +198,7 @@ jobs:
             release/**/*
             ~/.npm/_logs/*
             *.json
-          if-no-files-found: error
+          if-no-files-found: warn
           compression-level: 9
           overwrite: true
       
