@@ -1,1 +1,1 @@
-# cmdwise-release
+# cmdwise-releases
