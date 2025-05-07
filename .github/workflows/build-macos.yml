@@ -78,7 +78,7 @@ jobs:
         with:
           tag: ${{ github.event.inputs.tag }}
           name: Release ${{ github.event.inputs.tag }}
-          artifacts: "release/*.dmg,release/*.zip"
+          artifacts: "release/*.dmg,release/*.zip,release/latest-mac.yml"
           body: |
             ## 安装说明
             
