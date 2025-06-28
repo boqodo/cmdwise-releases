@@ -78,7 +78,7 @@ jobs:
         with:
           tag: ${{ github.event.inputs.tag }}
           name: Release ${{ github.event.inputs.tag }}
-          artifacts: "release/*.dmg,release/*.zip"
+          artifacts: "release/*.exe,release/*.zip,release/*.dmg,release/*.AppImage,release/*.snap,release/*.deb,release/*.rpm,release/*.tar.gz,release/latest*.yml,release/*.blockmap"
           body: |
             ## 安装说明
             
