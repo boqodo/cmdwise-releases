@@ -7,7 +7,7 @@
 Transform complex command-line operations into intuitive visual interfaces. Download applications from the marketplace or generate custom tools with AI assistance.
 
 🌐 **Website**: [cmdwise.app](https://cmdwise.app)  
-📱 **Platform**: macOS 
+📱 **Platform**: macOS   
 🎯 **Purpose**: Simplify command-line operations through visual interfaces
 
 ## Key Features
