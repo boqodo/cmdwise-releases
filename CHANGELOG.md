@@ -1,5 +1,16 @@
-# v0.1.14 (2025-07-13)
+# v0.1.17 (2025-07-13)
 
+## Updates
+
+### English
+- Fix licenses.json generation issue
+- Fix version update text display error
+
+### 中文
+- 修复：许可证文件生成问题
+- 修复：版本更新文案显示错误
+
+# v0.1.14 (2025-07-13)
 
 ## Updates
 
