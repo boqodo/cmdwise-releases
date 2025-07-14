@@ -73,21 +73,16 @@ jobs:
           security delete-keychain build.keychain
           rm -rf ~/certs
 
+      - name: Generate release notes
+        run: node scripts/gen-release-notes.js ${{ github.event.inputs.tag }}
+
       - name: Create Release
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ github.event.inputs.tag }}
           name: Release ${{ github.event.inputs.tag }}
           artifacts: "release/*.exe,release/*.zip,release/*.dmg,release/*.AppImage,release/*.snap,release/*.deb,release/*.rpm,release/*.tar.gz,release/latest*.yml,release/*.blockmap"
-          body: |
-            ## 安装说明
-            
-            已经过 Apple 签名和公证，可以直接打开使用。
-            
-            ### macOS 安装方式
-            1. 下载 DMG 文件
-            2. 打开 DMG，将应用拖入应用程序文件夹
-            3. 双击直接打开 CmdWise
+          bodyFile: release_notes.md
           token: ${{ secrets.GITHUB_TOKEN }}
           draft: false
           prerelease: false
