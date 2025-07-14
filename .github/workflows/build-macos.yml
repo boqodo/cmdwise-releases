@@ -89,7 +89,7 @@ jobs:
         with:
           tag: ${{ github.event.inputs.tag }}
           name: Release ${{ github.event.inputs.tag }}
-          artifacts: "release/*.exe,release/*.zip,release/*.dmg,release/*.AppImage,release/*.snap,release/*.deb,release/*.rpm,release/*.tar.gz,release/latest*.yml,release/*.blockmap"
+          artifacts: "cmdwise/release/*.exe,cmdwise/release/*.zip,cmdwise/release/*.dmg,cmdwise/release/*.AppImage,cmdwise/release/*.snap,cmdwise/release/*.deb,cmdwise/release/*.rpm,cmdwise/release/*.tar.gz,cmdwise/release/latest*.yml,cmdwise/release/*.blockmap"
           bodyFile: release_notes.md
           token: ${{ secrets.GITHUB_TOKEN }}
           draft: false
