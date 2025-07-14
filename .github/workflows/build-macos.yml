@@ -22,6 +22,7 @@ jobs:
           repository: boqodo/cmdwise
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           ref: ${{ github.event.inputs.tag }}
+          path: cmdwise
 
       - name: Setup Node.js
         uses: actions/setup-node@v3
@@ -36,7 +37,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node-
 
+      # Node.js and build steps will operate inside the cmdwise directory
+
       - name: Install dependencies
+        working-directory: cmdwise
         run: npm install
 
       - name: Prepare certificates
@@ -58,6 +62,7 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" build.keychain
 
       - name: Build and Sign for macOS
+        working-directory: cmdwise
         run: npm run dist:macos
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
